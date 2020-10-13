@@ -1,0 +1,193 @@
+
+# Hensikten er å laste inn data til KOSTRA analyse samt bidra med mulig 
+
+
+
+#install.packages("PxWebApiData")
+library(PxWebApiData)
+library(tidyverse)
+
+Region <- c("0219",
+            "0220",
+            "0301",
+            "0602",
+            "1001",
+            "1102",
+            "1601",
+            "1201",
+            "1902",
+            "0106",
+            "1103")
+
+
+Tabeller <- c("12657","12648","12656")
+
+
+Tabeller_kostra <- c("12209","12362","11924","12003","12293","11933","11875","12367","11805","12292","12212")
+
+Tabeller_brukere <- c("10135","10137","10138","09939") #Disse er stort sett velidg ubrukelige. Går ikke an å se hva slags brukere det er 
+#ApiData("12657", KOKkommuneregion000 = Region, ContentsCode = TRUE,
+#        Tid = TRUE, returnMetaFrames = FALSE)
+
+#Folketall tabell 11805 <- trengs for regnestykkker 
+
+
+mylist <- list()
+
+for (i in Tabeller_kostra) {
+  mylist[i]<-ApiData(i, KOKkommuneregion0000 = Region, ContentsCode = TRUE,
+                       Tid = TRUE)
+}
+
+
+for (i in Tabeller_brukere) {
+  mylist[i]<-ApiData(i, Region = Region, ContentsCode = TRUE,
+                     Tid = TRUE)
+}
+
+
+mylist[i]<-ApiData(11642, Region = Region, ContentsCode = TRUE,
+                   Tid = TRUE)
+
+ mylist[i]<-ApiData("12367", KOKkommuneregion0000 = Region, ContentsCode = TRUE,
+            KOKfunksjon0000 = "254", KOKart0000 = TRUE,Tid = TRUE)
+ 
+# t<-bind_rows(t[1])
+ # Laster bare ned 254 kostnader
+ 
+
+  names(mylist)
+  #mylist[i]<-ApiData(i, Region = Region, ContentsCode = TRUE,
+#                     Tid = TRUE)
+
+
+
+#####
+  
+  
+  
+  
+  
+  
+  
+  
+######## Analyse og grafer ######
+
+df <- bind_rows(mylist, id= NULL)
+
+#install.packages("xlsx")
+library(xlsx)
+write.xlsx(df, "KOSTRA.xlsx")
+
+
+df %>% select(statistikkvariabel) %>% 
+unique()  
+
+
+#Fjern dobble rader
+df <- distinct(df)
+
+library(xlsx)
+write.xlsx(df, "KOSTRA.xlsx")
+
+
+
+############### REgnestukker tjenesteprofil ####
+
+
+names(df)
+
+
+# netto hjemme tjenester under 67 per innbygger
+
+df %>% 
+  select(år,region,statistikkvariabel ,value,) %>% 
+  filter(region == "Asker") %>% 
+  group_by(region, år) %>% 
+  summarise(
+    "Utgifter per oppholdsdøgn i institusjon (kr)"= sum`(Utgifter per oppholdsdøgn i institusjon (kr)`),
+    "Utgifter per oppholdsdøgn i institusjon (kr)" = "Utgifter per oppholdsdøgn i institusjon (kr)")
+
+#Hjemmetjenester - brukere 0-66 år (antall)
+
+#Hjemmetjenester - brukere 0-66 år (antall)
+
+#Utgifter per oppholdsdøgn i institusjon (kr)
+#Brutto driftsutgifter, institusjon, per plass (kr)
+
+###### grafer #####
+
+names(df)
+
+df %>% 
+  select(region,år,region,statistikkvariabel ,value) %>% 
+  filter(statistikkvariabel == "Netto driftsutgifter til omsorgstjenester i prosent av kommunens samlede netto driftsutgifter (prosent)") %>% 
+  ggplot(., aes(x = år, y = value) )
+
+
+### Antall brukere hjemmetjeneste 
+
+df %>% 
+  select(region,år,region,statistikkvariabel,alder, tjenestegrupper ,value) %>% 
+  filter(region == "Bærum", statistikkvariabel ==  "Brukere (antall)",tjenestegrupper == "Heimeteneste", alder == "I alt"  ) %>% 
+  ggplot(., aes(x = år, y = value))+
+  geom_bar(color = , stat = "identity")+
+  theme_light()
+
+
+
+
+###########Testing og tull ##########
+
+#### Netto utgifter per innbygger #####
+gruppe <-df %>% 
+  select(region,år,region,statistikkvariabel ,value) 
+  filter(år == "2017") %>% 
+  #filter(region != "Asker" ) %>% 
+  spread(key = statistikkvariabel, value = value) %>%
+  mutate(tot_antall_innbyggere = `Folkemengde i alt` ) %>% #### denne må endres er direkte feil
+  mutate(
+    netto_utg_tot_perI = `Netto driftsutgifter i alt, konsern` / tot_antall_innbyggere,
+    netto_utg_inst_f261_f261_perI = `Netto driftsutgifter til pleie- og omsorg - Institusjoner (f253+261), konsern` /
+      tot_antall_innbyggere,
+    netto_utg_hjemme_perI = `Netto driftsutgifter,  tjenester til hjemmeboende brukere (f254), konsern` /
+      tot_antall_innbyggere
+  ) %>%
+  select(
+    region,
+    år,
+    netto_utg_tot_perI,
+    netto_utg_inst_f261_f261_perI,
+    netto_utg_hjemme_perI
+  ) %>%
+  filter(!is.na(netto_utg_tot_perI)) %>%
+  gather(key = variabel,
+         value = value,
+         netto_utg_tot_perI:netto_utg_hjemme_perI) %>%  
+  group_by(variabel) %>% 
+  mutate(ASSS = mean(value), graf_dat = 100*value/ASSS)
+
+
+ggplot(gruppe, aes(x = region, y = graf_dat, group = variabel, fill = variabel)) +
+  geom_bar(position = "dodge", stat = "identity") +
+  geom_abline(slope = 0,
+              intercept = 100,
+              color = "red") +
+  geom_text(aes(label = round(graf_dat,0)),
+            position = position_dodge(width = 0.9),
+            vjust = -0.25) +
+  ggtitle("") +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)
+  ) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 200)) +
+  xlab("") +
+  ylab("") +
+  scale_fill_brewer(labels=c("Hjemmetjenesten (f254)","Institusjoner (f253+261)","Totalt netto utgifter PLO"),
+                    palette="Blues", name = "") +
+  theme_classic()
+
+
+ # funker ikke
+#######
+
+
